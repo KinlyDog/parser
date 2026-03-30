@@ -1,0 +1,65 @@
+import 'dart:convert';
+import 'package:dio/dio.dart';
+
+void main() async {
+  final dio = Dio();
+
+  try {
+    final response = await dio.post(
+      'https://www.dns-shop.ru/ajax-state/product-buy/',
+      data: {
+        'data': jsonEncode({
+          "type": "product-buy",
+          "containers": [
+            {
+              "id": "as-k1LdwC",
+              "data": {
+                "id": "9134159", // 👈 МЕНЯТЬ ID ТОВАРА
+                "params": {
+                  "showOneClick": true,
+                  "isCard": true
+                }
+              }
+            }
+          ]
+        })
+      },
+      options: Options(
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': '*/*',
+          'X-Requested-With': 'XMLHttpRequest',
+
+          // ✅ COOKIE В ОДНУ СТРОКУ (ЭТО ВАЖНО)
+          'Cookie':
+          'cartUserCookieIdent_v3=718f258a6ce567dbbcf02e961d2c356ffce6c4de3b5de3003990d11eb287fd40a%3A2%3A%7Bi%3A0%3Bs%3A22%3A%22cartUserCookieIdent_v3%22%3Bi%3A1%3Bs%3A36%3A%2228af37b7-2d94-3583-a0ea-3342e2e55332%22%3B%7D; PHPSESSID=1882a518db0851b0b4be4d8aff259e99; lang=ru; city_path=komsomolsk-na-amure; _csrf=a8f81e3697d8f005002864c040b6c2279fb9be9ae5257740fb2941073a9347b6a%3A2%3A%7Bi%3A0%3Bs%3A5%3A%22_csrf%22%3Bi%3A1%3Bs%3A32%3A%22GK85lVtoyeAQQxM5lNAWJ9FdeJTmnO7f%22%3B%7D',
+
+          // ❗ ОБНОВЛЯТЬ ПРИ ПРОТУХАНИИ
+          'X-CSRF-Token':
+          '-ybZStDKzTNqzpHxRfCasESvgL0nec3zSfBrhUjBgD28beF_vJy5XBOr0KAUiNeFKOHB6m1Ai5csuj_oJo63Ww==',
+
+          // ❗ ДОЛЖЕН СООТВЕТСТВОВАТЬ ТОВАРУ
+          'Referer':
+          'https://www.dns-shop.ru/product/863240e81d9d3a40/smart-casy-hiper-iot-watch-gt-dop-remesok/no-referrer',
+
+          'Origin': 'https://www.dns-shop.ru',
+
+          'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3 Safari/605.1.15',
+        },
+      ),
+    );
+
+    final data = response.data;
+    print(data);
+    final product = data['data']['states'][0]['data'];
+
+    final name = product['name'];
+    final price = product['price']['min'];
+
+    print('📱 $name');
+    print('💰 $price ₽');
+  } catch (e) {
+    print('Ошибка: $e');
+  }
+}
