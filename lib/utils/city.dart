@@ -1,10 +1,16 @@
-String getCityFromCookie(String cookie) {
-  final cityPathMatch = RegExp(r'city_path=([^;]+)').firstMatch(cookie);
+/// Extracts `city_path` from the cookie string.
+/// Returns decoded value or `null` when the cookie doesn't contain it.
+String? extractCityPathFromCookie(String cookie) {
+  final match = RegExp(r'city_path=([^;]+)').firstMatch(cookie);
+  if (match == null) return null;
 
-  if (cityPathMatch != null) {
-    return 'Город: ${cityPathMatch.group(1)}\n'
-        '============================\n';
+  final raw = match.group(1);
+  if (raw == null || raw.isEmpty) return null;
+
+  // Value may be percent-encoded depending on how the cookie was built.
+  try {
+    return Uri.decodeComponent(raw);
+  } catch (_) {
+    return raw;
   }
-
-  return 'Город не найден';
 }

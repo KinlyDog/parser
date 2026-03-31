@@ -9,6 +9,8 @@ class ApiClient {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': '*/*',
+      'Accept-Language': 'ru',
+      'Cache-Control': 'max-age=0',
       'X-Requested-With': 'XMLHttpRequest',
       'Cookie': cookie,
       'X-CSRF-Token': csrf,
@@ -20,26 +22,36 @@ class ApiClient {
     dio.options.validateStatus = (status) => true;
   }
 
-  Future<Response> getProduct(String id, String referer) {
+  Future<Response> getProducts(List<String> ids, {String? referer}) {
+    final containers = ids.map((id) {
+      // Важно: делаем id контейнера детерминированным, чтобы в ответе `states[i].id`
+      // можно было однозначно сопоставить с запрошенным "человеческим" id.
+      return {
+        'id': 'as-$id',
+        // В devtools/curl обычно отправляется как строка.
+        'data': {'id': id},
+      };
+    }).toList();
+
+    final payload = {
+      'type': 'product-buy',
+      'containers': containers,
+    };
+
+    // Важно: сервер ожидает form-urlencoded: data=<json>
+    final body = 'data=${Uri.encodeQueryComponent(jsonEncode(payload))}';
+
     return dio.post(
       'https://www.dns-shop.ru/ajax-state/product-buy/',
-      data: {
-        'data': jsonEncode({
-          "type": "product-buy",
-          "containers": [
-            {
-              "id": "as-$id",
-              "data": {
-                "id": id,
-                "params": {"showOneClick": true, "isCard": true}
-              }
-            }
-          ]
-        })
-      },
-      options: Options(headers: {
-        'Referer': referer,
-      }),
+      data: body,
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        headers: referer == null || referer.isEmpty
+            ? null
+            : {
+                'Referer': referer,
+              },
+      ),
     );
   }
 }

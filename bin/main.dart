@@ -2,15 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:apple_world/api_client.dart';
-import 'package:apple_world/models.dart';
 import 'package:apple_world/parser.dart';
 import 'package:apple_world/utils/city.dart';
 import 'package:path/path.dart' as p;
 
 Future<void> main() async {
   try {
-    final projectRoot = _resolveProjectRoot();
-    final configDir = Directory(p.join(projectRoot.path, 'config'));
+    final debug = const bool.fromEnvironment('DEBUG', defaultValue: false);
+    final configDir = _resolveConfigDir();
 
     final cookieFromEnv = const String.fromEnvironment(
       'AUTH_COOKIE',
@@ -47,7 +46,13 @@ Future<void> main() async {
     }
 
     final api = ApiClient(cookie, csrf);
-    print(getCityFromCookie(cookie));
+    final city = extractCityPathFromCookie(cookie);
+    if (city == null) {
+      print('Город не найден');
+    } else {
+      print('Город: $city');
+      print('============================');
+    }
 
     final productsFile = File(p.join(configDir.path, 'products.json'));
     final productsJsonDecoded = jsonDecode(await productsFile.readAsString());
@@ -55,31 +60,77 @@ Future<void> main() async {
       throw FormatException('config/products.json must be an array');
     }
 
-    final products = productsJsonDecoded.map((e) {
-      if (e is! Map) {
-        throw FormatException('Invalid product entry in products.json');
+    final refererFromEnv = const String.fromEnvironment(
+      'REFERER',
+      defaultValue: '',
+    ).trim();
+    var referer = refererFromEnv;
+
+    final ids = <String>[];
+    for (final entry in productsJsonDecoded) {
+      if (entry is String) {
+        final id = entry.trim();
+        if (id.isNotEmpty) ids.add(id);
+        continue;
       }
-      return Product.fromJson(e.cast<String, dynamic>());
-    }).toList();
 
-    // 🔁 Проходим по всем товарам
-    for (final product in products) {
-      try {
-        final response = await api.getProduct(product.id, product.referer);
-
-        if (response.statusCode == 200) {
-          final parsed = parseProductPrice(response.data);
-          print('📱 ${parsed.name}');
-          print('💰 Цена: ${parsed.price} ₽');
-          print('------------------------');
-        } else {
-          print('Ошибка ${response.statusCode} для ${product.name}');
+      if (entry is Map) {
+        final id = entry['id'];
+        if (id is! String || id.isEmpty) {
+          throw FormatException('Invalid product.id in products.json');
         }
-      } catch (e, st) {
-        print('Ошибка для ${product.name} (${product.id}): $e');
-        // stacktrace полезен при отладке структуры ответа
-        print(st);
+        ids.add(id);
+
+        final entryReferer = entry['referer'];
+        if (referer.isEmpty && entryReferer is String && entryReferer.isNotEmpty) {
+          referer = entryReferer;
+        }
+        continue;
       }
+
+      throw FormatException('Invalid item in products.json. Expected string id or object.');
+    }
+
+    if (ids.isEmpty) {
+      throw StateError('products.json does not contain any ids');
+    }
+
+    final response = await api.getProducts(
+      ids,
+      referer: referer.isEmpty ? null : referer,
+    );
+
+    if (debug) {
+      print('DEBUG status=${response.statusCode}');
+      try {
+        final raw = jsonEncode(response.data);
+        final preview = raw.length > 4000 ? raw.substring(0, 4000) : raw;
+        print('DEBUG response preview (first ${preview.length} chars):');
+        print(preview);
+        if (raw.length > preview.length) {
+          print('DEBUG ... truncated ...');
+        }
+      } catch (e) {
+        print('DEBUG unable to jsonEncode response.data: $e');
+        print('DEBUG response.data runtimeType=${response.data.runtimeType}');
+      }
+    }
+
+    if (response.statusCode != 200) {
+      throw HttpException('Unexpected status: ${response.statusCode}');
+    }
+
+    final parsedById = parseProductPrices(response.data, requestIds: ids);
+    for (final id in ids) {
+      final parsed = parsedById[id];
+      if (parsed == null) {
+        print('Нет данных по id=$id (parsed keys: ${parsedById.keys.take(10).toList()}${parsedById.length > 10 ? '...' : ''})');
+        continue;
+      }
+
+      print(parsed.name);
+      print('Цена: ${parsed.price} ₽');
+      print('------------------------');
     }
   } catch (e, st) {
     print('Ошибка запуска: $e');
@@ -87,14 +138,12 @@ Future<void> main() async {
   }
 }
 
-Directory _resolveProjectRoot() {
-  try {
-    final scriptPath = Platform.script.toFilePath();
-    final binDir = File(scriptPath).parent;
-    return binDir.parent;
-  } catch (_) {
-    return Directory.current;
-  }
+Directory _resolveConfigDir() {
+  final fromEnv = const String.fromEnvironment('CONFIG_DIR', defaultValue: '').trim();
+  if (fromEnv.isNotEmpty) return Directory(fromEnv);
+
+  // Best effort: assume запуск из корня проекта (это стандартно для CLI).
+  return Directory(p.join(Directory.current.path, 'config'));
 }
 
 File _resolveAuthFile(Directory configDir) {
