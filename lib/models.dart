@@ -10,10 +10,24 @@ class Product {
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
+    final id = json['id'];
+    final name = json['name'];
+    final referer = json['referer'];
+
+    if (id is! String || id.isEmpty) {
+      throw FormatException('Invalid product.id');
+    }
+    if (name is! String || name.isEmpty) {
+      throw FormatException('Invalid product.name');
+    }
+    if (referer is! String || referer.isEmpty) {
+      throw FormatException('Invalid product.referer');
+    }
+
     return Product(
-      id: json['id'],
-      name: json['name'],
-      referer: json['referer'],
+      id: id,
+      name: name,
+      referer: referer,
     );
   }
 }

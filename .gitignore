@@ -6,3 +6,5 @@ analysis_options.yaml
 apple-world.iml
 CHANGELOG.md
 pubspec.lock
+config/auth.json
+config/auth.local.json
