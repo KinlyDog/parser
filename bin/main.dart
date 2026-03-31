@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:apple_world/api_client.dart';
 import 'package:apple_world/models.dart';
 import 'package:apple_world/parser.dart';
-import '../lib/utils/city.dart';
+import 'package:apple_world/utils/city.dart';
 
 Future<void> main() async {
   final city = await getCityFromCookie();
@@ -12,7 +12,6 @@ Future<void> main() async {
   print('📍 Город: $city');
   print('========================\n');
 
-  // 🔐 Загружаем auth
   final authFile = File('config/auth.json');
   final authJson = jsonDecode(await authFile.readAsString());
 
