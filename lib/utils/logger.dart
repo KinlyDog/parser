@@ -1,4 +1,3 @@
-// lib/utils/logger.dart
 import 'package:logging/logging.dart';
 
 final logger = Logger('AppLogger');
