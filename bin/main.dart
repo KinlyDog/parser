@@ -29,14 +29,14 @@ Future<void> main() async {
     final cookie = cookieFromEnv.isNotEmpty
         ? cookieFromEnv
         : (authJsonDecoded['cookie'] is String
-            ? (authJsonDecoded['cookie'] as String)
-            : '');
+              ? (authJsonDecoded['cookie'] as String)
+              : '');
 
     final csrf = csrfFromEnv.isNotEmpty
         ? csrfFromEnv
         : (authJsonDecoded['csrfToken'] is String
-            ? (authJsonDecoded['csrfToken'] as String)
-            : '');
+              ? (authJsonDecoded['csrfToken'] as String)
+              : '');
 
     if (cookie.isEmpty || csrf.isEmpty) {
       throw StateError(
@@ -51,13 +51,7 @@ Future<void> main() async {
       print('Город не найден');
     } else {
       print('Город: $city');
-      print('============================');
-    }
-
-    final productsFile = File(p.join(configDir.path, 'products.json'));
-    final productsJsonDecoded = jsonDecode(await productsFile.readAsString());
-    if (productsJsonDecoded is! List) {
-      throw FormatException('config/products.json must be an array');
+      print('===============================================');
     }
 
     final refererFromEnv = const String.fromEnvironment(
@@ -66,33 +60,61 @@ Future<void> main() async {
     ).trim();
     var referer = refererFromEnv;
 
+    final jsonFile = File(p.join(configDir.path, 'products.json'));
+    final txtFile = File(p.join(configDir.path, 'products.txt'));
     final ids = <String>[];
-    for (final entry in productsJsonDecoded) {
-      if (entry is String) {
-        final id = entry.trim();
-        if (id.isNotEmpty) ids.add(id);
-        continue;
+
+    if (jsonFile.existsSync()) {
+      final decoded = jsonDecode(await jsonFile.readAsString());
+
+      if (decoded is! List) {
+        throw FormatException('config/products.json must be an array');
       }
 
-      if (entry is Map) {
-        final id = entry['id'];
-        if (id is! String || id.isEmpty) {
-          throw FormatException('Invalid product.id in products.json');
+      for (final entry in decoded) {
+        if (entry is String) {
+          final id = entry.trim();
+          if (id.isNotEmpty) ids.add(id);
+          continue;
         }
-        ids.add(id);
 
-        final entryReferer = entry['referer'];
-        if (referer.isEmpty && entryReferer is String && entryReferer.isNotEmpty) {
-          referer = entryReferer;
+        if (entry is Map) {
+          final id = entry['id'];
+          if (id is! String || id.isEmpty) {
+            throw FormatException('Invalid product.id in products.json');
+          }
+          ids.add(id);
+
+          final entryReferer = entry['referer'];
+          if (referer.isEmpty &&
+              entryReferer is String &&
+              entryReferer.isNotEmpty) {
+            referer = entryReferer;
+          }
+          continue;
         }
-        continue;
+
+        throw FormatException(
+          'Invalid item in products.json. Expected string id or object.',
+        );
       }
-
-      throw FormatException('Invalid item in products.json. Expected string id or object.');
+    } else if (txtFile.existsSync()) {
+      final content = await txtFile.readAsString();
+      ids.addAll(
+        content
+            .split(RegExp(r'[,\s\n]+'))
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty),
+      );
+    } else {
+      throw FileSystemException(
+        'No products.json or products.txt found',
+        configDir.path,
+      );
     }
 
     if (ids.isEmpty) {
-      throw StateError('products.json does not contain any ids');
+      throw StateError('No product ids provided');
     }
 
     final response = await api.getProducts(
@@ -107,9 +129,7 @@ Future<void> main() async {
         final preview = raw.length > 4000 ? raw.substring(0, 4000) : raw;
         print('DEBUG response preview (first ${preview.length} chars):');
         print(preview);
-        if (raw.length > preview.length) {
-          print('DEBUG ... truncated ...');
-        }
+        if (raw.length > preview.length) print('DEBUG ... truncated ...');
       } catch (e) {
         print('DEBUG unable to jsonEncode response.data: $e');
         print('DEBUG response.data runtimeType=${response.data.runtimeType}');
@@ -121,17 +141,43 @@ Future<void> main() async {
     }
 
     final parsedById = parseProductPrices(response.data, requestIds: ids);
+
+    // --- CSV Export ---
+    final exportDir = Directory(p.join(Directory.current.path, 'export'));
+    if (!exportDir.existsSync()) exportDir.createSync(recursive: true);
+
+    // Текущая дата в формате YYYYMMDD
+    final now = DateTime.now();
+    final formattedDate =
+        '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+
+    final csvFile = File(p.join(exportDir.path, 'DNS_$formattedDate.csv'));
+    final csvRows = <String>[];
+    csvRows.add('Артикул,Название,Цена'); // Заголовки CSV
+
     for (final id in ids) {
       final parsed = parsedById[id];
+
       if (parsed == null) {
-        print('Нет данных по id=$id (parsed keys: ${parsedById.keys.take(10).toList()}${parsedById.length > 10 ? '...' : ''})');
+        print(
+          'Нет данных по id=$id (parsed keys: ${parsedById.keys.take(10).toList()}${parsedById.length > 10 ? '...' : ''})',
+        );
         continue;
       }
 
+      // --- Консольный вывод (старый формат) ---
       print(parsed.name);
-      print('Цена: ${parsed.price} ₽');
-      print('------------------------');
+      final cleanPrice = parsed.price.toString().replaceAll(RegExp(r'\D'), '');
+      print('Цена: $cleanPrice ₽');
+      print('--------------------------------------');
+
+      // --- CSV Export ---
+      final safeName = parsed.name.replaceAll('"', '""');
+      csvRows.add('$id,"$safeName",$cleanPrice');
     }
+
+    await csvFile.writeAsString(csvRows.join('\n'));
+    print('CSV сохранен: ${csvFile.path}');
   } catch (e, st) {
     print('Ошибка запуска: $e');
     print(st);
@@ -139,10 +185,11 @@ Future<void> main() async {
 }
 
 Directory _resolveConfigDir() {
-  final fromEnv = const String.fromEnvironment('CONFIG_DIR', defaultValue: '').trim();
+  final fromEnv = const String.fromEnvironment(
+    'CONFIG_DIR',
+    defaultValue: '',
+  ).trim();
   if (fromEnv.isNotEmpty) return Directory(fromEnv);
-
-  // Best effort: assume запуск из корня проекта (это стандартно для CLI).
   return Directory(p.join(Directory.current.path, 'config'));
 }
 
