@@ -12,8 +12,11 @@ import 'package:apple_world/services/product_service.dart';
 import 'package:apple_world/api_client.dart';
 
 Future<void> main() async {
-  // --- Настройка логгера ---
-  final debug = const bool.fromEnvironment('DEBUG', defaultValue: false);
+  // --- Настройка DEBUG ---
+  final debug =
+      const bool.fromEnvironment('DEBUG', defaultValue: false) ||
+      (Platform.environment['DEBUG']?.toLowerCase() == 'true');
+
   setupLogging(debug: debug);
 
   try {
@@ -28,24 +31,32 @@ Future<void> main() async {
 Future<void> runApp({required bool debug}) async {
   logger.info('Запуск приложения...');
 
-  // --- Конфигурация и авторизация ---
   final configDir = Directory(p.join(Directory.current.path, 'config'));
   final authConfig = await loadAuthConfig(configDir);
   final api = ApiClient(authConfig.cookie, authConfig.csrfToken);
 
   logCity(extractCityPathFromCookie(authConfig.cookie));
 
-  // --- Загрузка списка продуктов ---
   final entries = await loadProducts(configDir);
-
-  // --- Получение данных и парсинг ---
   final parsedById = await fetchAndParse(entries, api, debug: debug);
 
   // --- Вывод в консоль ---
-  printProducts(parsedById, entries);
+  if (debug) {
+    // Полный подробный вывод
+    printProducts(parsedById, entries);
+  } else {
+    // Короткое сообщение
+    logger.info(
+      'Парсинг завершён. Найдено товаров: ${parsedById.length}. CSV будет сохранён.',
+    );
+  }
 
-  // --- Экспорт в CSV ---
+  // --- Экспорт CSV ---
   await exportCsv(parsedById, entries);
+
+  if (!debug) {
+    logger.info('CSV успешно сохранён.');
+  }
 }
 
 /// Загружает конфигурацию авторизации
