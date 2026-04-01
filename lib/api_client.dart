@@ -5,20 +5,22 @@ class ApiClient {
   final Dio dio;
 
   ApiClient(String cookie, String csrf)
-      : dio = Dio(BaseOptions(
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': '*/*',
-      'Accept-Language': 'ru',
-      'Cache-Control': 'max-age=0',
-      'X-Requested-With': 'XMLHttpRequest',
-      'Cookie': cookie,
-      'X-CSRF-Token': csrf,
-      'Origin': 'https://www.dns-shop.ru',
-      'User-Agent':
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
-    },
-  )) {
+    : dio = Dio(
+        BaseOptions(
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': '*/*',
+            'Accept-Language': 'ru',
+            'Cache-Control': 'max-age=0',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Cookie': cookie,
+            'X-CSRF-Token': csrf,
+            'Origin': 'https://www.dns-shop.ru',
+            'User-Agent':
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
+          },
+        ),
+      ) {
     dio.options.validateStatus = (status) => true;
   }
 
@@ -33,10 +35,7 @@ class ApiClient {
       };
     }).toList();
 
-    final payload = {
-      'type': 'product-buy',
-      'containers': containers,
-    };
+    final payload = {'type': 'product-buy', 'containers': containers};
 
     // Важно: сервер ожидает form-urlencoded: data=<json>
     final body = 'data=${Uri.encodeQueryComponent(jsonEncode(payload))}';
@@ -48,9 +47,7 @@ class ApiClient {
         contentType: Headers.formUrlEncodedContentType,
         headers: referer == null || referer.isEmpty
             ? null
-            : {
-                'Referer': referer,
-              },
+            : {'Referer': referer},
       ),
     );
   }

@@ -3,9 +3,7 @@ Map<String, ({String name, num price})> parseProductPrices(
   required List<String> requestIds,
 }) {
   if (data is! Map) {
-    throw FormatException(
-      'Unexpected response root type: ${data.runtimeType}',
-    );
+    throw FormatException('Unexpected response root type: ${data.runtimeType}');
   }
 
   final root = data;
@@ -88,5 +86,7 @@ num _parseNum(dynamic value, String fieldName) {
     if (parsed != null) return parsed;
   }
 
-  throw FormatException('Invalid numeric value for $fieldName: ${value.runtimeType}=$value');
+  throw FormatException(
+    'Invalid numeric value for $fieldName: ${value.runtimeType}=$value',
+  );
 }
