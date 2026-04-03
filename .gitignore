@@ -15,3 +15,5 @@ config/auth.json
 config/auth.local.json
 /export/
 /my_app
+/DNS_parser_app/
+/apple_world
